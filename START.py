@@ -1,63 +1,90 @@
-# added a comment
-
-import cv2
+import cv2 as cv
 import numpy as np
 
+#Trackbar Code
+def nothing(x):
+    pass
+def initializeTrackbars(intialTracbarVal=125):
+    cv.namedWindow("WinTrackbars")
+    cv.resizeWindow("WinTrackbars", 360, 240)
+    cv.createTrackbar("Threshold1", "WinTrackbars", intialTracbarVal,255, nothing)
+    cv.createTrackbar("Threshold2", "WinTrackbars", intialTracbarVal, 255, nothing)
+ 
+initializeTrackbars()
 
-########################################################################
-webCamFeed = True  # set to false if no webcam available
+def valTrackbars():
+    Threshold1 = cv.getTrackbarPos("Threshold1", "WinTrackbars")
+    Threshold2 = cv.getTrackbarPos("Threshold2", "WinTrackbars")
+    src = Threshold1,Threshold2
+    return src
+
+
+#Finds the biggest countour
+def biggestContour(contours):
+    biggest = np.array([])
+    max_area = 0
+    for i in contours:
+        area = cv.contourArea(i)
+        #Sets the maximum area size to 4999
+        if area > 5000:
+            peri = cv.arcLength(i, True)
+            approx = cv.approxPolyDP(i, 0.02 * peri, True)
+            if area > max_area and len(approx) == 4:
+                biggest = approx
+                max_area = area
+    return biggest,max_area
+ 
+#Reorders the points to warp image
+def reorder(thePoints):
+    thePoints = thePoints.reshape((4, 2))
+    thePoints = np.zeros((4, 1, 2), dtype=np.int32)
+    add = thePoints.sum(1)
+ 
+    theNewPoints[0] = thePoints[np.argmin(add)]
+    theNewPoints[3] = thePoints[np.argmax(add)]
+    diff = np.diff(thePoints, axis=1)
+    theNewPoints[1] = thePoints[np.argmin(diff)]
+    theNewPoints[2] = thePoints[np.argmax(diff)]
+    
+    return    
+ 
+
+#If there is no webcam feed available
+webCamFeed = False
 pathImage = "Images\\image004.jpg"
-# main webcam -> 0
-cap = cv2.VideoCapture(0)
+#If there is webcam feed availaable
+cap = cv.VideoCapture(0)
 cap.set(10, 160)
-heightImg = 480
-widthImg = 640
-########################################################################
+heightImg = 500
+widthImg = 600
 
 count = 0
 
 while True:
-    # input is either webcam or image
+    #If there is webcam feed
     if webCamFeed:
         success, img = cap.read()
+    #If there is no webcam feed    
     else:
-        img = cv2.imread(pathImage)
-    # RESIZE IMAGE
-    img = cv2.resize(img, (widthImg, heightImg))
-    # CREATE A BLANK IMAGE FOR TESTING DEBUGING IF REQUIRED
-    #imgBlank = np.zeros((heightImg, widthImg, 3), np.uint8)
-    # CONVERT IMAGE TO GRAY SCALE
-    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-     imgBlur = cv2.GaussianBlur(imgGray, (5, 5), 1)  # ADD GAUSSIAN BLUR
+        img = cv.imread(pathImage)
+    #Resizing the image
+    thres = valTrackbars()
+    img = cv.resize(img, (heightImg, widthImg))
+    #Creates a blank image
+    imgBlank = np.zeros((heightImg, widthImg, 3), np.uint8)
+    #Turns the image into Greyscale
+    imgGray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    #Adds Gaussian Blur to the image 
+    imgBlur = cv.GaussianBlur(imgGray, (5, 5), 1)
     # thres = valTrackbars()  # GET TRACK BAR VALUES FOR THRESHOLDS
-     imgCanny = cv2.Canny(imgBlur, thres[0], thres[1])  # APPLY CANNY BLUR
-    #kernel = np.ones((5, 5))
-     imgDial = cv2.dilate(imgCanny, kernel, iterations=2)  # APPLY DILATION
-    # imgThreshold = cv2.erode(imgDial, kernel, iterations=1)  # APPLY EROSION
-
-    cv2.imshow("1. Original", img)
-    cv2.imshow("2. Grayscale", imgGray)
-    cv2.imshow("3. Blur", imgBlur)
-    cv2.imshow("4. Canny", imgCanny)
-    cv2.imshow("5. Dilate", imgDial)
-    #cv2.imshow("6. Treshold", imgThreshold)
-    #cv2.imshow("7. imgContours", imgContours)
-
-    # Press x  on keyboard to  exit
-    # Close and break the loop after pressing "x" key
-    if cv2.waitKey(1) & 0XFF == ord('x'):
-        break  # exit infinite loop
-
-     # SAVE IMAGE WHEN 's' key is pressed
-    if cv2.waitKey(1) & 0xFF == ord('s'):
-        print("saving")
-        # save image to folder using cv2.imwrite()
-        cv2.imwrite("Scanned/myImage"+str(count)+".jpg", imgContours)
-        cv2.waitKey(300)
-        count += 1
-# When everything done, release
-# the video capture object
-cap.release()
-
-# Closes all the frames
-cv2.destroyAllWindows()
+    imgCanny = cv.Canny(imgBlur, thres[0], thres[1]) #thres[0], thres[1])  # APPLY CANNY BLUR
+    kernel = np.ones((5, 5))
+    #Dilates the image
+    imgDial = cv.dilate(imgCanny, kernel, iterations=2)
+    #Erodes the image
+    imgThreshold = cv.erode(imgDial, kernel, iterations=1)
+    imgContours = img.copy()
+    contours, hierarchy = cv.findContours(imgThreshold, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    cv.drawContours(imgThreshold, contours, -1, (255, 0, 0), 10)
+    biggest, max_area = biggestContour(contours)
+    theNewPoints = reorder(biggest)
