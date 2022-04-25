@@ -37,7 +37,7 @@ def biggestContour(contours):
 #Reorders the points to warp image
 def reorder(thePoints):
     thePoints = thePoints.reshape((4, 2))
-    thePoints = np.zeros((4, 1, 2), dtype=np.int32)
+    theNewPoints = np.zeros((4, 1, 2), dtype=np.int32)
     add = thePoints.sum(1)
  
     theNewPoints[0] = thePoints[np.argmin(add)]
@@ -46,8 +46,18 @@ def reorder(thePoints):
     theNewPoints[1] = thePoints[np.argmin(diff)]
     theNewPoints[2] = thePoints[np.argmax(diff)]
     
-    return    
+    return theNewPoints   
  
+def drawRectangle(img,biggest,thickness):
+    cv.line(img, (biggest[0][0][0], biggest[0][0][1]), (biggest[1][0][0], biggest[1][0][1]), (0, 155, 0), thickness)
+    cv.line(img, (biggest[0][0][0], biggest[0][0][1]), (biggest[2][0][0], biggest[2][0][1]), (0, 155, 0), thickness)
+    cv.line(img, (biggest[3][0][0], biggest[3][0][1]), (biggest[2][0][0], biggest[2][0][1]), (0, 155, 0), thickness)
+    cv.line(img, (biggest[3][0][0], biggest[3][0][1]), (biggest[1][0][0], biggest[1][0][1]), (0, 155, 0), thickness)
+ 
+    return img
+
+
+# draw = drawRectangle(imgContours, theNewPoints, 10)
 
 #If there is no webcam feed available
 webCamFeed = False
@@ -84,7 +94,47 @@ while True:
     #Erodes the image
     imgThreshold = cv.erode(imgDial, kernel, iterations=1)
     imgContours = img.copy()
+
     contours, hierarchy = cv.findContours(imgThreshold, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     cv.drawContours(imgThreshold, contours, -1, (255, 0, 0), 10)
+
     biggest, max_area = biggestContour(contours)
     theNewPoints = reorder(biggest)
+    draw = drawRectangle(imgContours, theNewPoints, 10)
+
+
+    point1= np.float32(theNewPoints)#float32 is funtion/method, np. is the library numpy
+
+    point2= np.float32([[0,0],[widthImg, 0], [0,heightImg], [widthImg, heightImg]])
+
+    matrix = cv.getPerspectiveTransform(point1, point2)
+
+    imgWarpColour = cv.warpPerspective(imgContours, matrix, (widthImg, heightImg))
+
+    cv.imshow("1. Original", img)
+    cv.imshow("2. Grayscale", imgGray)
+    cv.imshow("3. Blur", imgBlur)
+    cv.imshow("4. Canny", imgCanny)
+    cv.imshow("5. Dilate", imgDial)
+    cv.imshow("6. Treshold", imgThreshold)
+    cv.imshow("7. imgContours", imgContours)
+    cv.imshow("8. imgWarp", imgWarpColour)
+
+    # Press x  on keyboard to  exit
+    # Close and break the loop after pressing "x" key
+    if cv.waitKey(1) & 0XFF == ord('x'):
+        break  # exit infinite loop
+
+     # SAVE IMAGE WHEN 's' key is pressed
+    if cv.waitKey(1) & 0xFF == ord('s'):
+        print("saving")
+        # save image to folder using cv2.imwrite()
+        cv.imwrite("Scanned/myImage"+str(count)+".jpg", imgWarpColour)
+        cv.waitKey(300)
+        count += 1
+# When everything done, release
+# the video capture object
+cap.release()
+
+# Closes all the frames
+cv.destroyAllWindows()
